@@ -46,10 +46,18 @@ jobs:
         shell: pwsh
         run: .\dist\clash-listener-test-win-x64.exe --help
 
+      - name: Write SHA256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash .\dist\clash-listener-test-win-x64.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  clash-listener-test-win-x64.exe" | Set-Content -Encoding ascii .\dist\clash-listener-test-win-x64.sha256
+
       - name: Upload Windows x64 executable
         uses: actions/upload-artifact@v4
         with:
           name: clash-listener-test-windows-x64
-          path: dist/clash-listener-test-win-x64.exe
+          path: |
+            dist/clash-listener-test-win-x64.exe
+            dist/clash-listener-test-win-x64.sha256
           if-no-files-found: error
           retention-days: 30
