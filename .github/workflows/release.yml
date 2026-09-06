@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - VERSION
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "VERSION must be semantic version X.Y.Z, got: $version"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Check whether release already exists
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ steps.version.outputs.tag }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "exists=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Release ${{ steps.version.outputs.tag }} already exists; build/publish steps will be skipped."
+          } else {
+            "exists=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Set up Python x64
+        if: steps.release.outputs.exists != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+          cache: pip
+
+      - name: Install dependencies
+        if: steps.release.outputs.exists != 'true'
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller==6.22.2
+
+      - name: Run tests
+        if: steps.release.outputs.exists != 'true'
+        run: |
+          python -m unittest discover -s tests -v
+          python -m py_compile test_listeners.py
+
+      - name: Build Windows x64 EXE
+        if: steps.release.outputs.exists != 'true'
+        run: >-
+          pyinstaller
+          --clean
+          --noconfirm
+          --onefile
+          --name clash-listener-test-win-x64
+          test_listeners.py
+
+      - name: Smoke test packaged executable
+        if: steps.release.outputs.exists != 'true'
+        shell: pwsh
+        run: .\dist\clash-listener-test-win-x64.exe --help
+
+      - name: Generate SHA256
+        if: steps.release.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          $exe = '.\dist\clash-listener-test-win-x64.exe'
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  clash-listener-test-win-x64.exe" | Set-Content -Encoding ascii '.\dist\clash-listener-test-win-x64.sha256'
+          Write-Host "SHA256: $hash"
+
+      - name: Write release notes
+        if: steps.release.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          @"
+          ## Clash Listener Test ${{ steps.version.outputs.tag }}
+
+          首个正式发布版本。
+
+          ### 主要能力
+          - 批量测试 Mihomo / Clash `listeners` 的 HTTP、SOCKS5 和 mixed 代理可用性；
+          - 仅在代理测试 PASS 后，通过同一代理查询出口公网 IP；
+          - 支持 Clash Controller `secret` 鉴权与本地运行配置回退；
+          - 输出终端 PASS/FAIL 结果及 JSON 报告；
+          - 提供无需安装 Python 的 Windows x64 单文件 EXE。
+
+          ### Windows x64
+          下载 `clash-listener-test-win-x64.exe` 后即可直接运行。
+          同时提供 `clash-listener-test-win-x64.sha256` 用于完整性校验。
+
+          ### 注意
+          当前 Windows EXE 未进行 Authenticode 代码签名，Windows SmartScreen 可能显示“未知发布者”。
+          "@ | Set-Content -Encoding utf8 '.\release-notes.md'
+
+      - name: Create GitHub Release
+        if: steps.release.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" `
+            '.\dist\clash-listener-test-win-x64.exe' `
+            '.\dist\clash-listener-test-win-x64.sha256' `
+            --target "$env:GITHUB_SHA" `
+            --title "Clash Listener Test ${{ steps.version.outputs.tag }}" `
+            --notes-file '.\release-notes.md'
