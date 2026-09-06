@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - VERSION
+      - .github/workflows/release.yml
   workflow_dispatch:
 
 permissions:
@@ -39,12 +40,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ steps.version.outputs.tag }}" *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $tag = '${{ steps.version.outputs.tag }}'
+          $releases = @(gh release list --limit 100 --json tagName | ConvertFrom-Json)
+          $exists = @($releases | Where-Object { $_.tagName -eq $tag }).Count -gt 0
+          if ($exists) {
             "exists=true" >> $env:GITHUB_OUTPUT
-            Write-Host "Release ${{ steps.version.outputs.tag }} already exists; build/publish steps will be skipped."
+            Write-Host "Release $tag already exists; build/publish steps will be skipped."
           } else {
             "exists=false" >> $env:GITHUB_OUTPUT
+            Write-Host "Release $tag does not exist; continuing with build and publish."
           }
 
       - name: Set up Python x64
