@@ -23,6 +23,51 @@
 - 支持 `listeners` 的 Mihomo 内核，例如使用该内核的 Clash Verge Rev。旧版 Clash 的能力可能不同。
 - Python 依赖：`requests[socks]`（包含 PySocks）和 `PyYAML`，见 [requirements.txt](requirements.txt)。
 
+### Windows x64 独立 EXE
+
+仓库通过 GitHub Actions 使用 Windows x64 runner + PyInstaller 构建单文件控制台程序：
+
+```text
+clash-listener-test-win-x64.exe
+```
+
+构建产物 Artifact 名称为：
+
+```text
+clash-listener-test-windows-x64
+```
+
+其中同时包含：
+
+```text
+clash-listener-test-win-x64.exe
+clash-listener-test-win-x64.sha256
+```
+
+下载并解压后可直接在 64 位 Windows 上运行，不需要另外安装 Python：
+
+```powershell
+.\clash-listener-test-win-x64.exe
+```
+
+命令行参数与 Python 版本完全一致，例如：
+
+```powershell
+.\clash-listener-test-win-x64.exe --ports 42000,42001 --workers 4 --timeout 15
+```
+
+GitHub Actions 会先运行单元测试，再构建 EXE，并执行 `--help` 冒烟测试；SHA256 文件用于核对下载产物完整性。
+当前 EXE 未做代码签名，Windows SmartScreen 或安全软件可能显示未知发布者提示；如需正式对外分发，建议后续增加代码签名。
+
+本地也可在 Windows x64 环境自行构建：
+
+```powershell
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller==6.22.2
+pyinstaller --clean --noconfirm --onefile --name clash-listener-test-win-x64 test_listeners.py
+.\dist\clash-listener-test-win-x64.exe --help
+```
+
 ### Windows PowerShell
 
 ```powershell
@@ -199,6 +244,14 @@ IP 查询失败不影响退出码。不支持的 listener 会记录为 skipped�
 ```
 
 测试使用模拟网络，不需要真实 Clash 或密钥；验证两种协议的 PASS→IP 顺序、失败跳过、IP 校验与颜色开关。
+
+GitHub Actions 同时执行：
+
+- Linux / Windows，Python 3.10 / 3.13 单元测试；
+- `py_compile`；
+- Windows x64 PyInstaller 打包；
+- 打包后 EXE `--help` 冒烟测试；
+- EXE 与 SHA256 作为 workflow artifact 保存。
 
 ## 参考
 
