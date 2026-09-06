@@ -1,0 +1,13 @@
+.venv*/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+listener-test-results*.json
+*-results.json
+config.yaml
+config.yml
+clash-verge.yaml
+*.log
