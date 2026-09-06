@@ -17,56 +17,103 @@
 请求忽略系统代理环境变量及 `NO_PROXY`，不回退直连，保留 TLS 证书校验且不跟随重定向。
 脚本不会修改 Clash 配置或切换节点，但会产生少量代理流量。
 
-## 环境与依赖安装
+## Windows x64 EXE（推荐）
 
-- Python 3.10 或更高版本；当前在 Windows / Python 3.13 / Mihomo v1.19.29 上做过实测。
-- 支持 `listeners` 的 Mihomo 内核，例如使用该内核的 Clash Verge Rev。旧版 Clash 的能力可能不同。
-- Python 依赖：`requests[socks]`（包含 PySocks）和 `PyYAML`，见 [requirements.txt](requirements.txt)。
+从 GitHub Releases 下载最新版本：
 
-### Windows x64 独立 EXE
+- Releases：<https://github.com/mrgolftech/clash-listener-test/releases>
+- v0.1.0：<https://github.com/mrgolftech/clash-listener-test/releases/tag/v0.1.0>
 
-仓库通过 GitHub Actions 使用 Windows x64 runner + PyInstaller 构建单文件控制台程序：
+Windows 64 位用户只需要下载：
 
 ```text
 clash-listener-test-win-x64.exe
 ```
 
-构建产物 Artifact 名称为：
+同时可以下载：
 
 ```text
-clash-listener-test-windows-x64
-```
-
-其中同时包含：
-
-```text
-clash-listener-test-win-x64.exe
 clash-listener-test-win-x64.sha256
 ```
 
-下载并解压后可直接在 64 位 Windows 上运行，不需要另外安装 Python：
+EXE 为 PyInstaller 构建的单文件控制台程序，已经包含 Python 解释器及运行依赖，目标 Windows 电脑**不需要安装 Python**。
+
+### 1. 最简单的运行方式
+
+先确保 Clash / Mihomo 已启动，并已配置 `external-controller`。打开 PowerShell，进入 EXE 所在目录：
 
 ```powershell
 .\clash-listener-test-win-x64.exe
 ```
 
-命令行参数与 Python 版本完全一致，例如：
+程序会提示：
+
+```text
+Clash 访问密钥（隐藏输入，无密钥直接回车）:
+```
+
+如果 Clash 配置了 `secret`，输入对应访问密钥并回车；如果没有设置，直接回车。
+
+默认会：
+
+- 连接 `http://127.0.0.1:9097`；
+- 找到配置中的全部可测试 listeners；
+- 对 mixed listener 分别执行 HTTP 和 SOCKS5 测试；
+- 访问 `https://www.gstatic.com/generate_204`；
+- PASS 后继续查询出口公网 IP；
+- 在当前目录生成 `listener-test-results.json`。
+
+### 2. EXE 常用命令
 
 ```powershell
+# 查看帮助
+.\clash-listener-test-win-x64.exe --help
+
+# 默认测试全部 listeners
+.\clash-listener-test-win-x64.exe
+
+# 指定 Clash Controller 地址
+.\clash-listener-test-win-x64.exe --controller http://127.0.0.1:9097
+
+# 明确指定当前运行配置 YAML
+.\clash-listener-test-win-x64.exe --config "C:\path\clash-verge.yaml"
+
+# 只测试指定端口
+.\clash-listener-test-win-x64.exe --ports 42000,42001
+
+# 降低并发并增加超时
 .\clash-listener-test-win-x64.exe --ports 42000,42001 --workers 4 --timeout 15
+
+# 只测代理可用性，不查询出口 IP
+.\clash-listener-test-win-x64.exe --no-ip
+
+# 更换 JSON 报告文件名
+.\clash-listener-test-win-x64.exe --output run-results.json
 ```
 
-GitHub Actions 会先运行单元测试，再构建 EXE，并执行 `--help` 冒烟测试；SHA256 文件用于核对下载产物完整性。
-当前 EXE 未做代码签名，Windows SmartScreen 或安全软件可能显示未知发布者提示；如需正式对外分发，建议后续增加代码签名。
+EXE 参数与 Python 脚本版本完全一致。
 
-本地也可在 Windows x64 环境自行构建：
+### 3. 校验下载文件
+
+Release 同时提供 SHA256 文件。PowerShell 可执行：
 
 ```powershell
-python -m pip install -r requirements.txt
-python -m pip install pyinstaller==6.22.2
-pyinstaller --clean --noconfirm --onefile --name clash-listener-test-win-x64 test_listeners.py
-.\dist\clash-listener-test-win-x64.exe --help
+Get-FileHash .\clash-listener-test-win-x64.exe -Algorithm SHA256
+Get-Content .\clash-listener-test-win-x64.sha256
 ```
+
+两边显示的 SHA256 应一致。
+
+### 4. Windows 安全提示
+
+当前 EXE 未做 Authenticode 代码签名，因此 Windows SmartScreen 或部分安全软件可能显示“未知发布者”或进行启发式检查。
+Release 附带 SHA256，可用于核对文件完整性；正式对外大规模分发时再考虑增加代码签名。
+
+## Python 环境与依赖安装
+
+- Python 3.10 或更高版本；当前在 Windows / Python 3.13 / Mihomo v1.19.29 上做过实测。
+- 支持 `listeners` 的 Mihomo 内核，例如使用该内核的 Clash Verge Rev。旧版 Clash 的能力可能不同。
+- Python 依赖：`requests[socks]`（包含 PySocks）和 `PyYAML`，见 [requirements.txt](requirements.txt)。
 
 ### Windows PowerShell
 
@@ -91,6 +138,19 @@ python3 -m venv .venv
 ```
 
 Linux / macOS 用法尚未在真实系统上验证；需要显式指定运行配置路径。
+
+### Windows 本地构建 EXE
+
+如需自行构建 Windows x64 EXE：
+
+```powershell
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller==6.22.2
+pyinstaller --clean --noconfirm --onefile --name clash-listener-test-win-x64 test_listeners.py
+.\dist\clash-listener-test-win-x64.exe --help
+```
+
+正常用户无需自行构建，优先使用 GitHub Release 中已经由 CI 构建并校验的版本。
 
 ## Clash 配置
 
@@ -164,7 +224,7 @@ Clash 访问密钥（隐藏输入，无密钥直接回车）:
 
 ## 常用命令
 
-以下命令在 Windows 项目目录执行；Linux / macOS 将解释器路径换成 `.venv/bin/python`。
+以下命令以 Python 版本为例；Windows EXE 用户把 `.\.venv\Scripts\python.exe test_listeners.py` 替换成 `.\clash-listener-test-win-x64.exe` 即可。
 
 ```powershell
 # 本机默认设置：所有 listeners，两种协议，PASS 后查询 IP
@@ -245,13 +305,14 @@ IP 查询失败不影响退出码。不支持的 listener 会记录为 skipped�
 
 测试使用模拟网络，不需要真实 Clash 或密钥；验证两种协议的 PASS→IP 顺序、失败跳过、IP 校验与颜色开关。
 
-GitHub Actions 同时执行：
+GitHub Actions：
 
 - Linux / Windows，Python 3.10 / 3.13 单元测试；
 - `py_compile`；
 - Windows x64 PyInstaller 打包；
 - 打包后 EXE `--help` 冒烟测试；
-- EXE 与 SHA256 作为 workflow artifact 保存。
+- 普通分支/PR 的 EXE 保存为 workflow artifact；
+- `VERSION` 版本号变更合入 `main` 后，自动创建对应 `vX.Y.Z` GitHub Release，并把 EXE 与 SHA256 作为 Release Assets 发布。
 
 ## 参考
 
